@@ -3,6 +3,8 @@
  * usage: udpserver <port>
  */
 
+// Kasper Seglem
+
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -105,6 +107,7 @@ int main(int argc, char **argv) {
 	   hostp->h_name, hostaddrp);
     printf("server received %d/%d bytes: %s\n", strlen(buf), n, buf);
 
+    // exit
     if (strncmp(buf, "exit", 4) == 0) {
         
 	char e1[BUFSIZE];
@@ -115,6 +118,7 @@ int main(int argc, char **argv) {
 	if (n < 0)
           error("ERROR in sendto");
     }
+    // ls
     else if (strncmp(buf, "ls", 2) == 0) {
     
 	char l1[BUFSIZE];
@@ -141,6 +145,49 @@ int main(int argc, char **argv) {
           error("ERROR in sendto");
 
     }
+    // get
+    else if (strncmp(buf, "get", 3) == 0) {
+
+	char f1[BUFSIZE];
+	strncpy(f1,&buf[4],BUFSIZE);
+	printf("Getting file: %s",f1);
+
+	n = sendto(sockfd, buf, BUFSIZE, 0,
+               (struct sockaddr *) &clientaddr, clientlen);
+        if (n < 0)
+          error("ERROR in sendto");
+
+	char filename[strlen(f1) - 1];
+	strncpy(filename, f1, strlen(f1) - 1);
+
+	FILE *fp;
+	char test[BUFSIZE];
+	fp = fopen(filename, "r");
+
+	if (!fp) {
+	    strcpy(test, "File not found");
+	    n = sendto(sockfd, test, BUFSIZE, 0,
+                (struct sockaddr *) &clientaddr, clientlen);
+            if (n < 0)
+                error("ERROR in sendto");
+	}
+	else {
+	    while (fgets(test, BUFSIZE, fp) != NULL) {
+	        n = sendto(sockfd, test, BUFSIZE, 0,
+                    (struct sockaddr *) &clientaddr, clientlen);
+                if (n < 0)
+                    error("ERROR in sendto");
+          
+	        bzero(test, BUFSIZE);
+	    }
+	    n = sendto(sockfd, test, BUFSIZE, 0,
+                (struct sockaddr *) &clientaddr, clientlen);
+            if (n < 0)
+                error("ERROR in sendto");
+	    
+	    printf("File sent\n");
+        }
+    }
     else {
     
 	/* 
@@ -155,3 +202,4 @@ int main(int argc, char **argv) {
     }
   }
 }
+

@@ -69,6 +69,7 @@ int main(int argc, char **argv) {
     	if (n < 0) 
     	  error("ERROR in sendto");
     	
+	bzero(buf, BUFSIZE);
     	/* print the server's reply */
     	n = recvfrom(sockfd, buf, BUFSIZE, 0, &serveraddr, &serverlen);
     	if (n < 0) 
@@ -79,7 +80,7 @@ int main(int argc, char **argv) {
 	if (strncmp(buf, "Goodbye!", 8) == 0) {
 	    break;
 	} 
-	if (strncmp(buf, "ls", 2) == 0) {
+	else if (strncmp(buf, "ls", 2) == 0) {
 	    
 	    n = recvfrom(sockfd, buf, BUFSIZE, 0, &serveraddr, &serverlen);
             if (n < 0)
@@ -87,6 +88,36 @@ int main(int argc, char **argv) {
             
 	    printf("%s\n",buf);
         }
+	else if (strncmp(buf, "get", 3) == 0){
+
+	    char f1[BUFSIZE];
+	    strncpy(f1,&buf[4],BUFSIZE);
+
+	    char filename[strlen(f1) - 1];
+	    strncpy(filename, f1, strlen(f1) - 1);
+	    printf("%s\n",filename);
+
+	    FILE *fp;
+	    char test[BUFSIZE];
+	    fp = fopen(filename, "w");
+
+	    while (1) {
+
+		n = recvfrom(sockfd, test, BUFSIZE, 0, &serveraddr, &serverlen);
+            	if (n < 0)
+             	    error("ERROR in recvfrom");
+
+		fputs(test, fp);
+		printf("%s",test);
+
+		if (strncmp(test, "", BUFSIZE) == 0) {
+		    break;
+		}
+	        bzero(test, BUFSIZE);
+	    }
+	    fclose(fp);
+	    printf("Received file: %s\n",filename);
+	}
     }
 
     return 0;
