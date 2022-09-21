@@ -120,6 +120,12 @@ int main(int argc, char **argv) {
     }
     // ls
     else if (strncmp(buf, "ls", 2) == 0) {
+
+        n = sendto(sockfd, buf, BUFSIZE, 0,
+               (struct sockaddr *) &clientaddr, clientlen);
+        if (n < 0)
+          error("ERROR in sendto");
+
     
 	char l1[BUFSIZE];
 	bzero(l1, BUFSIZE);
@@ -134,11 +140,6 @@ int main(int argc, char **argv) {
     	    closedir(d);
         }
 
-        n = sendto(sockfd, buf, BUFSIZE, 0,
-               (struct sockaddr *) &clientaddr, clientlen);
-        if (n < 0)
-          error("ERROR in sendto");
-
 	n = sendto(sockfd, l1, BUFSIZE, 0, 
             (struct sockaddr *) &clientaddr, clientlen);
 	if (n < 0)
@@ -150,43 +151,109 @@ int main(int argc, char **argv) {
 
 	char f1[BUFSIZE];
 	strncpy(f1,&buf[4],BUFSIZE);
-	printf("Getting file: %s",f1);
+	printf("Sending file: %s",f1);
 
 	n = sendto(sockfd, buf, BUFSIZE, 0,
                (struct sockaddr *) &clientaddr, clientlen);
         if (n < 0)
           error("ERROR in sendto");
+	bzero(buf, BUFSIZE);
 
 	char filename[strlen(f1) - 1];
 	strncpy(filename, f1, strlen(f1) - 1);
 
 	FILE *fp;
 	char test[BUFSIZE];
-	fp = fopen(filename, "r");
+	fp = fopen(filename, "rb");
+	int read = 1;
 
-	if (!fp) {
-	    strcpy(test, "File not found");
-	    n = sendto(sockfd, test, BUFSIZE, 0,
-                (struct sockaddr *) &clientaddr, clientlen);
-            if (n < 0)
-                error("ERROR in sendto");
-	}
-	else {
-	    while (fgets(test, BUFSIZE, fp) != NULL) {
-	        n = sendto(sockfd, test, BUFSIZE, 0,
-                    (struct sockaddr *) &clientaddr, clientlen);
+	if (access(filename, F_OK) == 0) {
+	    while (1) {
+		bzero(test, BUFSIZE);
+
+		read = fread(test, 1, BUFSIZE, fp);
+
+		if (read < 1) break;
+
+	        n = sendto(sockfd, test, BUFSIZE, 0, &clientaddr, clientlen);
                 if (n < 0)
                     error("ERROR in sendto");
           
 	        bzero(test, BUFSIZE);
+		usleep(1);
 	    }
-	    n = sendto(sockfd, test, BUFSIZE, 0,
-                (struct sockaddr *) &clientaddr, clientlen);
+	    n = sendto(sockfd, "DONEDONE", BUFSIZE, 0, &clientaddr, clientlen);
             if (n < 0)
                 error("ERROR in sendto");
 	    
-	    printf("File sent\n");
+	    printf("File sent\n\n");
         }
+	else {
+	    printf("Bad\n");
+            strcpy(test, "File not found");
+            n = sendto(sockfd, test, BUFSIZE, 0,
+                (struct sockaddr *) &clientaddr, clientlen);
+            if (n < 0)
+                error("ERROR in sendto");
+        }
+    }
+    // put
+    else if (strncmp(buf, "put", 3) == 0){
+
+            char f1[BUFSIZE];
+            strncpy(f1,&buf[4],BUFSIZE);
+
+	    n = sendto(sockfd, buf, BUFSIZE, 0,
+               (struct sockaddr *) &clientaddr, clientlen);
+            if (n < 0)
+               error("ERROR in sendto");
+	    bzero(buf, BUFSIZE);
+
+            char filename[strlen(f1) - 1];
+            strncpy(filename, f1, strlen(f1) - 1);
+
+            FILE *fp;
+            char test[BUFSIZE];
+            fp = fopen(filename, "wb");
+
+            while (1) {
+		bzero(test, BUFSIZE);
+
+                n = recvfrom(sockfd, test, BUFSIZE, 0,
+                 (struct sockaddr *) &clientaddr, &clientlen);
+                if (n < 0)
+                    error("ERROR in recvfrom");
+
+                if (strncmp(test, "DONEDONE", 8) == 0) {
+                    printf("DONEDONE\n");
+                    break;
+                }
+                else if (strncmp(test, "File not found",14) == 0) {
+                    remove(filename);
+                    printf("%s\n",test);
+                    break;
+                }
+
+                fwrite(test, 1, BUFSIZE, fp);
+                bzero(test, BUFSIZE);
+            }
+            fclose(fp);
+    }
+    // delete
+    else if (strncmp(buf, "delete", 6) == 0) {
+
+	n = sendto(sockfd, buf, strlen(buf), 0, &clientaddr, clientlen);
+        if (n < 0)
+            error("ERROR in sendto");
+
+	char f1[BUFSIZE];
+	strncpy(f1,&buf[7],BUFSIZE);
+
+	char filename[strlen(f1) - 1];
+	strncpy(filename, f1, strlen(f1) - 1);
+
+	// remove(filename);
+
     }
     else {
     
@@ -194,7 +261,7 @@ int main(int argc, char **argv) {
 	 * sendto: echo the input back to the client 
 	 */
 	char unable[BUFSIZE];
-	strcpy(unable, "command not understood");
+	strcpy(unable, "command not understood\n");
 	n = sendto(sockfd, unable, BUFSIZE, 0, 
             (struct sockaddr *) &clientaddr, clientlen);
 	if (n < 0) 

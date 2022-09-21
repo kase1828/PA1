@@ -60,34 +60,43 @@ int main(int argc, char **argv) {
 
 	/* get a message from the user */
 	bzero(buf, BUFSIZE);
-	printf("Please enter msg: ");
+	printf("commands:\n");
+	printf(" -get [file_name]\n");
+	printf(" -put [file_name]\n");
+	printf(" -delete [file_name]\n");
+	printf(" -ls\n");
+	printf(" -exit\n");
+	printf("client: ");
 	fgets(buf, BUFSIZE, stdin);
 	
     	/* send the message to the server */
     	serverlen = sizeof(serveraddr);
-    	n = sendto(sockfd, buf, BUFSIZE, 0, &serveraddr, serverlen);
+    	n = sendto(sockfd, buf, strlen(buf), 0, &serveraddr, serverlen);
     	if (n < 0) 
     	  error("ERROR in sendto");
     	
 	bzero(buf, BUFSIZE);
-    	/* print the server's reply */
+ 
+	/* print the server's reply */
     	n = recvfrom(sockfd, buf, BUFSIZE, 0, &serveraddr, &serverlen);
     	if (n < 0) 
     	  error("ERROR in recvfrom");
+    	printf("server: %s\n", buf);
 
-    	printf("Server: %s\n", buf);
-
+	// exit
 	if (strncmp(buf, "Goodbye!", 8) == 0) {
 	    break;
-	} 
+	}
+	// ls
 	else if (strncmp(buf, "ls", 2) == 0) {
-	    
+
 	    n = recvfrom(sockfd, buf, BUFSIZE, 0, &serveraddr, &serverlen);
             if (n < 0)
               error("ERROR in recvfrom");
             
 	    printf("%s\n",buf);
         }
+	// get
 	else if (strncmp(buf, "get", 3) == 0){
 
 	    char f1[BUFSIZE];
@@ -99,26 +108,80 @@ int main(int argc, char **argv) {
 
 	    FILE *fp;
 	    char test[BUFSIZE];
-	    fp = fopen(filename, "w");
+	    fp = fopen(filename, "wb");
 
 	    while (1) {
+		bzero(test, BUFSIZE);
 
 		n = recvfrom(sockfd, test, BUFSIZE, 0, &serveraddr, &serverlen);
             	if (n < 0)
              	    error("ERROR in recvfrom");
 
-		fputs(test, fp);
-		printf("%s",test);
-
-		if (strncmp(test, "", BUFSIZE) == 0) {
+		if (strncmp(test, "DONEDONE", 8) == 0) {
+		    printf("DONEDONE\n");
 		    break;
 		}
+		else if (strncmp(test, "File not found",14) == 0) {
+		    remove(filename);
+		    printf("%s\n",test);
+		    break;
+		}
+
+		fwrite(test, 1, BUFSIZE, fp);
 	        bzero(test, BUFSIZE);
 	    }
 	    fclose(fp);
-	    printf("Received file: %s\n",filename);
 	}
-    }
+	// put
+	else if (strncmp(buf, "put", 3) == 0) {
 
+		char f1[BUFSIZE];
+		strncpy(f1,&buf[4],BUFSIZE);
+		printf("Sending file: %s",f1);
+
+		char filename[strlen(f1) - 1];
+		strncpy(filename, f1, strlen(f1) - 1);
+
+		FILE *fp;
+		char test[BUFSIZE];
+		fp = fopen(filename, "rb");
+		int read = 1;
+
+		if (access(filename, F_OK) == 0) {
+		    while (1) {
+			bzero(test, BUFSIZE);
+
+			read = fread(test, 1, BUFSIZE, fp);
+
+			if (read < 1) break;
+
+			n = sendto(sockfd, test, BUFSIZE, 0, &serveraddr, serverlen);
+			if (n < 0)
+			    error("ERROR in sendto");
+
+			bzero(test, BUFSIZE);
+			usleep(1);
+		    }
+		    n = sendto(sockfd, "DONEDONE", BUFSIZE, 0, &serveraddr, serverlen);
+		    if (n < 0)
+			error("ERROR in sendto");
+
+		    printf("File sent\n\n");
+		}
+		else {
+		    printf("Bad\n");
+		    strcpy(test, "File not found");
+		    n = sendto(sockfd, test, BUFSIZE, 0, &serveraddr, serverlen);
+		    if (n < 0)
+			error("ERROR in sendto");
+		}
+    	}
+	// delete
+	else if (strncmp(buf, "delete", 7) == 0) {
+
+            printf("deleted\n");
+        }
+
+    }
     return 0;
 }
